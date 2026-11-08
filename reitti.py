@@ -309,8 +309,26 @@ def write_gpx(pts, km, name, sport, outdir):
 COLORS = {"lit": {"valaistu": "#1D9E75", "valaisematon": "#E24B4A", "tuntematon": "#EF9F27"},
           "surf": {"päällystämätön": "#1D9E75", "päällystetty": "#378ADD", "tuntematon": "#888780"}}
 
-def write_preview(pts, km, name, mode, loop, gpxfile):
-    """SVG-esikatselu (380 px leveä, värit = valaistus tai pinta) show_widget-työkalulle."""
+MAPS_MODE = {"juoksu-katu": "walking", "juoksu-maasto": "walking", "rullaluistelu": "walking",
+             "gravel": "bicycling", "xc-mtb": "bicycling"}
+
+def maps_url(pts, sport, n=8):
+    """Google Maps -reittilinkki: lähtö, maali ja n tasavälein otettua välipistettä reitiltä.
+    Maps laskee välit itse, joten reitti voi paikoin poiketa GPX:stä."""
+    cum = [0.0]
+    for i in range(1, len(pts)): cum.append(cum[-1] + hav(pts[i-1][0], pts[i][0]))
+    total = cum[-1]; wps = []; j = 0
+    for k in range(1, n + 1):
+        t = total * k / (n + 1)
+        while j < len(cum) - 1 and cum[j] < t: j += 1
+        wps.append(pts[j][0])
+    f = lambda c: f"{c[1]:.5f},{c[0]:.5f}"
+    return ("https://www.google.com/maps/dir/?api=1&origin=" + f(pts[0][0]) + "&destination=" + f(pts[-1][0])
+            + "&waypoints=" + "%7C".join(f(c) for c in wps) + "&travelmode=" + MAPS_MODE.get(sport, "walking"))
+
+def write_preview(pts, km, name, mode, loop, gpxfile, url=None):
+    """Esikatselu show_widget-työkalulle: Maps-nappi (jos url) + SVG (380 px, värit = valaistus tai pinta).
+    Klikkaus napista tai kartasta avaa reitin Google Mapsissa."""
     lat0 = pts[0][0][1]; k = math.cos(math.radians(lat0))
     xs = [c[0] * k for c, _ in pts]; ys = [-c[1] for c, _ in pts]
     w0 = max(xs) - min(xs) or 1e-9; h0 = max(ys) - min(ys) or 1e-9
@@ -347,14 +365,19 @@ def write_preview(pts, km, name, mode, loop, gpxfile):
                 f'<text class="ts" x="74" y="{yy}" dominant-baseline="central">maali</text>')
     H = int(yy + 30)
     esc = lambda t: t.replace("&", "&amp;").replace("<", "&lt;")
-    svg = (f'<svg width="100%" viewBox="0 0 380 {H}" role="img"><title>{esc(name)}</title>'
+    click = f' style="cursor:pointer" onclick="openLink(\'{url}\')"' if url else ""
+    btn = ('<button onclick="openLink(\'' + url + '\')" style="display:block;width:100%;margin:0 0 8px;'
+           'padding:10px;font-size:15px;border:0.5px solid var(--border-strong);border-radius:var(--radius);'
+           'background:var(--surface-1);color:var(--text-primary);cursor:pointer">'
+           '<i class="ti ti-map-2" aria-hidden="true"></i> Avaa Google Mapsissa</button>\n') if url else ""
+    svg = btn + (f'<svg width="100%" viewBox="0 0 380 {H}" role="img"{click}><title>{esc(name)}</title>'
            f'<desc>Reitin esikatselu, {km:.1f} km, värit: {"valaistus" if mode == "lit" else "pinta"}</desc>\n'
            f'{paths}\n{marks}\n'
            f'<line x1="40" y1="{y:.0f}" x2="{40 + bw:.0f}" y2="{y:.0f}" stroke="#888780" stroke-width="1.5"/>'
            f'<line x1="40" y1="{y - 5:.0f}" x2="40" y2="{y + 5:.0f}" stroke="#888780" stroke-width="1.5"/>'
            f'<line x1="{40 + bw:.0f}" y1="{y - 5:.0f}" x2="{40 + bw:.0f}" y2="{y + 5:.0f}" stroke="#888780" stroke-width="1.5"/>'
            f'<text class="ts" x="{52 + bw:.0f}" y="{y:.0f}" dominant-baseline="central">{bl}</text>\n{leg}\n</svg>\n')
-    fn = gpxfile[:-4] + "_esikatselu.svg"
+    fn = gpxfile[:-4] + "_esikatselu.html"
     with open(fn, "w", encoding="utf-8") as f: f.write(svg)
     return fn
 
@@ -391,9 +414,11 @@ def main():
 
     total, asc, stats, stretches = analyse(pts)
     fn = write_gpx(pts, total / 1000, a.nimi, a.laji, a.out)
-    pv = write_preview(pts, total / 1000, a.nimi, "lit" if lit > 0 else "surf", loop, fn)
+    url = maps_url(pts, a.laji)
+    pv = write_preview(pts, total / 1000, a.nimi, "lit" if lit > 0 else "surf", loop, fn, url)
     print(f"TIEDOSTO: {fn}")
     print(f"ESIKATSELU: {pv}")
+    print(f"MAPS: {url}")
     print(f"LAJI: {a.laji} | Connectissa valitse: {CONNECT_LAJI[a.laji]} | valaistuspaino: {lit}")
     print(f"LÄHTÖ: {start[2]}")
     if not loop: print(f"MAALI: {end[2]}")

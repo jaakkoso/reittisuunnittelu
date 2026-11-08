@@ -34,6 +34,15 @@ class TrimSpurs(unittest.TestCase):
         pts = [([*A], {"lit": "yes"}), ([*B], {"lit": "no"}), ([*T], {}), ([*B], {}), ([*C], {"lit": "yes"})]
         self.assertEqual([t for _, t in R.trim_spurs(pts)], [{"lit": "yes"}, {"lit": "no"}, {"lit": "yes"}])
 
+class MapsUrl(unittest.TestCase):
+    def test_linkki(self):
+        pts = P(A, B, C, D, T, A)
+        url = R.maps_url(pts, "gravel", n=3)
+        self.assertTrue(url.startswith("https://www.google.com/maps/dir/?api=1&origin=62.79000,22.80000"))
+        self.assertIn("&destination=62.79000,22.80000", url)
+        self.assertEqual(url.split("&waypoints=")[1].split("&")[0].count("%7C"), 2)
+        self.assertTrue(url.endswith("&travelmode=bicycling"))
+
 class Fixture:
     """Toistaa tallennetut BRouter-vastaukset pistelistan perusteella."""
     def __init__(self, name):

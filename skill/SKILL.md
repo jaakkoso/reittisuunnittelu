@@ -52,7 +52,7 @@ Enduro-MTB ajetaan `xc-mtb`-profiililla.
 
 ## Toimita
 
-1. **Näytä esikatselu aina ensin.** Lue tulosteen `ESIKATSELU:`-rivin SVG-tiedosto ja näytä se `show_widget`-työkalulla ennen GPX:n lähettämistä. Värit kertovat valaistuksen (tai pinnan, jos valaistuspaino on 0) legendan mukaan.
+1. **Näytä esikatselu aina ensin.** Lue tulosteen `ESIKATSELU:`-rivin HTML-tiedosto (Google Maps -nappi + SVG-kartta) ja näytä se sellaisenaan `show_widget`-työkalulla ennen GPX:n lähettämistä. Värit kertovat valaistuksen (tai pinnan, jos valaistuspaino on 0) legendan mukaan. Nappi ja kartan klikkaus avaavat reitin Google Mapsissa (`MAPS:`-rivi). Mainitse tarvittaessa, että Maps laskee välipisteiden välit itse, joten se voi paikoin poiketa GPX:stä; kellossa seurataan GPX:ää.
 2. Lähetä GPX (`TIEDOSTO:`-rivi) `SendUserFile`-työkalulla (`display: "attach"`, `status: "normal"`).
 3. Vastaa lyhyesti suomeksi: matka, nousu, valaistus- ja pintajakauma, mahdolliset pimeät pätkät (km-kohdat), muutos tavoitteeseen ja vaihtunut suunta (`SUUNTA:`).
 4. Siirto-ohje yhdellä rivillä: **Avaa tiedosto puhelimessa → Jaa → Connect → valitse laji (skriptin "Connectissa valitse") → Lähetä laitteeseen.**
