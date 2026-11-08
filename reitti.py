@@ -12,6 +12,7 @@ assign turnInstructionMode = 0
 assign downhillcost = 0
 assign uphillcost = 0
 assign lit_weight = {LIT}
+assign quiet_weight = {QUIET}
 """
 NODE = """
 ---context:node
@@ -27,6 +28,10 @@ assign isknownsurface = or ispaved or isrough or isgravel or isdirt issoft
 assign litfactor = if lit=yes then 1
                    else if lit=no then add 1 multiply 3 lit_weight
                    else add 1 multiply 0.7 lit_weight
+assign noisefactor = if estimated_noise_class=6 then 2.2 else if estimated_noise_class=5 then 1.8
+                     else if estimated_noise_class=4 then 1.4 else if estimated_noise_class=3 then 1.15 else 1.0
+assign forestfactor = if estimated_forest_class=4|5|6 then 0.85 else if estimated_forest_class=2|3 then 0.93 else 1.0
+assign quietfactor = add 1 multiply quiet_weight sub multiply noisefactor forestfactor 1
 assign turncost = 0
 assign initialcost = 0
 """
@@ -48,7 +53,7 @@ assign basecost = if highway=footway|cycleway|pedestrian then 1.0
                   else if highway=steps then 3.0
                   else 2.5
 assign surfacefactor = if ispaved then 1.0 else if isgravel then 1.3 else if or isdirt issoft then 1.8 else 1.1
-assign costfactor = if isblocked then 10000 else multiply basecost multiply surfacefactor litfactor
+assign costfactor = if isblocked then 10000 else multiply basecost multiply surfacefactor multiply litfactor quietfactor
 """),
 "juoksu-maasto": ("foot", 0, """
 assign validForFoot = true
@@ -67,7 +72,7 @@ assign basecost = if highway=path|track|bridleway then 1.0
                   else if highway=steps then 2.0
                   else 2.5
 assign surfacefactor = if or isgravel isdirt then 1.0 else if issoft then 1.4 else if ispaved then 1.3 else 1.1
-assign costfactor = if isblocked then 10000 else multiply basecost multiply surfacefactor litfactor
+assign costfactor = if isblocked then 10000 else multiply basecost multiply surfacefactor multiply litfactor quietfactor
 """),
 "gravel": ("bike", 0, """
 assign validForBikes = true
@@ -90,7 +95,7 @@ assign basecost = if highway=track then if tracktype=grade4|grade5 then 1.6 else
 assign surfacefactor = if isgravel then 1.0 else if isdirt then 1.3 else if issoft then 2.5
                        else if ispaved then 1.6 else if isrough then 2.0
                        else if highway=track then 1.1 else 1.4
-assign costfactor = if isblocked then 10000 else multiply basecost multiply surfacefactor litfactor
+assign costfactor = if isblocked then 10000 else multiply basecost multiply surfacefactor multiply litfactor quietfactor
 """),
 "xc-mtb": ("bike", 0, """
 assign validForBikes = true
@@ -112,7 +117,7 @@ assign basecost = if highway=path|bridleway then if mtb:scale=4|5|6 then 3.0 els
                   else if highway=steps then 6.0
                   else 2.5
 assign surfacefactor = if or isdirt isgravel then 1.0 else if issoft then 1.5 else if ispaved then 1.3 else 1.1
-assign costfactor = if isblocked then 10000 else multiply basecost multiply surfacefactor litfactor
+assign costfactor = if isblocked then 10000 else multiply basecost multiply surfacefactor multiply litfactor quietfactor
 """),
 "rullaluistelu": ("foot", 1, """
 assign validForFoot = true
@@ -134,7 +139,7 @@ assign basecost = if highway=cycleway then 1.0
                   else 2.5
 assign surfacefactor = if ispaved then 1.0 else if surface=paving_stones then 3.0 else 1.5
 assign costfactor = if or isblocked not pavedenough then 10000
-                    else multiply basecost multiply surfacefactor litfactor
+                    else multiply basecost multiply surfacefactor multiply litfactor quietfactor
 """),
 }
 LIT_LEVELS = {"ei": 0, "suosi": 1, "vahva": 2}
@@ -175,9 +180,11 @@ def dest(lat, lon, bearing, km):
     l2 = l1 + math.atan2(math.sin(b)*math.sin(d)*math.cos(p1), math.cos(d) - math.sin(p1)*math.sin(p2))
     return math.degrees(p2), math.degrees(l2)
 
-def upload_profile(sport, lit):
+def upload_profile(sport, lit, quiet=False):
+    """quiet=True: vältetään meluisia (isojen teiden varren) väyliä ja suositaan metsäisiä
+    (BRouterin estimated_noise_class / estimated_forest_class)."""
     _, _, body = PROFILES[sport]
-    text = COMMON_GLOBAL.replace("{LIT}", str(lit)) + body + NODE
+    text = COMMON_GLOBAL.replace("{LIT}", str(lit)).replace("{QUIET}", "1" if quiet else "0") + body + NODE
     res = json.loads(http(BROUTER + "/profile", data=text.encode(), ctype="text/plain"))
     if "error" in res and res["error"]: sys.exit("VIRHE profiilissa: " + str(res["error"]))
     return res["profileid"]
@@ -268,11 +275,13 @@ def classify(tags):
     return lit, surf
 
 def analyse(pts):
-    stats = {"lit": {}, "surf": {}, "hw": {}}; stretches = []; pos = 0.0; cur = None; asc = 0.0
+    stats = {"lit": {}, "surf": {}, "hw": {}, "env": {}}; stretches = []; pos = 0.0; cur = None; asc = 0.0
     base = pts[0][0][2] if len(pts[0][0]) > 2 else None
     for i in range(1, len(pts)):
         c, tags = pts[i]; d = hav(pts[i-1][0], c); lit, surf = classify(tags)
-        for k, v in (("lit", lit), ("surf", surf), ("hw", tags.get("highway", "muu"))):
+        nc = tags.get("estimated_noise_class", "0"); fc = tags.get("estimated_forest_class", "0")
+        ymp = ("meluisa" if nc in ("4", "5", "6") else "metsäinen" if fc in ("2", "3", "4", "5", "6") else "muu")
+        for k, v in (("lit", lit), ("surf", surf), ("hw", tags.get("highway", "muu")), ("env", ymp)):
             stats[k][v] = stats[k].get(v, 0) + d
         if lit != "valaistu":
             cur = cur or [pos, pos]; cur[1] = pos + d
@@ -393,12 +402,14 @@ def main():
     ap.add_argument("--km", type=float, help="tavoitematka (lenkissä pakollinen)")
     ap.add_argument("--suunta", type=float, default=0, help="lenkin suunta asteina, 0=pohjoinen")
     ap.add_argument("--valaistus", choices=LIT_LEVELS)
+    ap.add_argument("--hiljainen", action="store_true",
+                    help="suosi hiljaisia pikkuteitä, ulkoilureittejä ja metsää, vältä isojen teiden varsia")
     ap.add_argument("--nimi", default="Reitti")
     ap.add_argument("--out", default=".")
     a = ap.parse_args()
 
     lit = LIT_LEVELS[a.valaistus] if a.valaistus else PROFILES[a.laji][1]
-    pid = upload_profile(a.laji, lit)
+    pid = upload_profile(a.laji, lit, a.hiljainen)
     start = geocode(a.lahto); vias = [geocode(v) for v in a.via]
     loop = not a.maali
     if loop and not vias and not a.km: sys.exit("VIRHE: lenkkiin tarvitaan --km tai --via")
@@ -429,6 +440,7 @@ def main():
     if total:
         print("VALAISTUS: " + pct(stats["lit"], total))
         print("PINTA: " + pct(stats["surf"], total))
+        print("YMPÄRISTÖ: " + pct(stats["env"], total) + " (meluisa = ison tien varsi)")
         print("TIETYYPIT: " + pct(dict(sorted(stats["hw"].items(), key=lambda x: -x[1])[:5]), total))
         long = sorted([s for s in stretches if s[1] - s[0] > 300], key=lambda s: s[0] - s[1])[:3]
         for s in sorted(long):

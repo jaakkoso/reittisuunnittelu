@@ -27,6 +27,7 @@ Enduro-MTB ajetaan `xc-mtb`-profiililla.
 4. Tavoitematka km (lenkissä pakollinen). Jos käyttäjä antaa ajan, muunna: juoksu ~6:00 min/km kevyesti, gravel ~22 km/h, xc-mtb ~16 km/h, rullaluistelu ~18 km/h.
 5. Valaistus: `ei`, `suosi`, `vahva`. Pimeän aikaan (loka–maaliskuu klo 16 jälkeen) ehdota juoksuun `vahva`.
 6. Lenkissä halutessaan suunta (pohjoinen = 0, itä = 90 …).
+7. Hiljaiset tiet: jos käyttäjä haluaa pienempiä teitä, ulkoilureittejä, metsää tai rauhallisempaa reittiä (tai valittaa isojen teiden varsista), lisää `--hiljainen`. Ei tarvitse kysyä erikseen.
 
 Älä kysy kotiosoitetta uudelleen, jos se on muistissa tai keskustelussa.
 
@@ -36,6 +37,7 @@ Enduro-MTB ajetaan `xc-mtb`-profiililla.
    ```
    curl -fsSL -o reitti.py https://raw.githubusercontent.com/jaakkoso/reittisuunnittelu/main/reitti.py
    python3 reitti.py --laji juoksu-katu --lahto "62.79,22.84" --km 7 --suunta 270 --valaistus vahva --nimi "Iltalenkki" --out .
+   python3 reitti.py --laji juoksu-maasto --lahto "62.7880,22.7900" --maali "Ukkoherranlenkki, Seinäjoki" --valaistus suosi --hiljainen --nimi "Hiljaiset tiet" --out .
    python3 reitti.py --laji gravel --lahto "Seinäjoen asema" --maali "Ilmajoen kirkko" --via "Ahonkylä, Ilmajoki" --nimi "Gravel Ilmajoelle" --out .
    ```
    Hae skripti kerran keskustelua kohden. Jos `reitti.py` on jo työhakemistossa tästä keskustelusta, käytä sitä.
@@ -54,6 +56,6 @@ Enduro-MTB ajetaan `xc-mtb`-profiililla.
 
 1. **Näytä esikatselu aina ensin.** Lue tulosteen `ESIKATSELU:`-rivin HTML-tiedosto (Google Maps -nappi + SVG-kartta) ja näytä se sellaisenaan `show_widget`-työkalulla ennen GPX:n lähettämistä. Värit kertovat valaistuksen (tai pinnan, jos valaistuspaino on 0) legendan mukaan. Nappi ja kartan klikkaus avaavat reitin Google Mapsissa (`MAPS:`-rivi). Mainitse tarvittaessa, että Maps laskee välipisteiden välit itse, joten se voi paikoin poiketa GPX:stä; kellossa seurataan GPX:ää.
 2. Lähetä GPX (`TIEDOSTO:`-rivi) `SendUserFile`-työkalulla (`display: "attach"`, `status: "normal"`).
-3. Vastaa lyhyesti suomeksi: matka, nousu, valaistus- ja pintajakauma, mahdolliset pimeät pätkät (km-kohdat), muutos tavoitteeseen ja vaihtunut suunta (`SUUNTA:`).
+3. Vastaa lyhyesti suomeksi: matka, nousu, valaistus- ja pintajakauma, ympäristö (`YMPÄRISTÖ:` – meluisa osuus = ison tien varsi), mahdolliset pimeät pätkät (km-kohdat), muutos tavoitteeseen ja vaihtunut suunta (`SUUNTA:`).
 4. Siirto-ohje yhdellä rivillä: **Avaa tiedosto puhelimessa → Jaa → Connect → valitse laji (skriptin "Connectissa valitse") → Lähetä laitteeseen.**
 5. Muistuta, että valaistusarvio perustuu OpenStreetMapin `lit`-merkintöihin: "tuntematon" ei tarkoita pimeää, mutta varmuutta ei ole.
