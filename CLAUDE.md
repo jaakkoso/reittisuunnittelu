@@ -36,7 +36,7 @@ Lajit: `juoksu-katu`, `juoksu-maasto`, `gravel`, `xc-mtb`, `rullaluistelu` (endu
 ## Seuraavat askeleet
 
 1. Korjaa kohta 1 ja lisää testit (`tests/`, tallennetut BRouter-vastaukset fixtureina, ei verkkoa testeissä).
-2. Vie repo GitHubiin. Sen jälkeen chat-skilli voi hakea uusimman `reitti.py`:n repolta (GitHub on pilvikontin sallituissa verkkotunnuksissa) eikä skriptiä tarvitse upottaa SKILL.md:hen.
+2. ~~Vie repo GitHubiin~~ – tehty 8.11.2026: https://github.com/jaakkoso/reittisuunnittelu (julkinen). Skripti: `https://raw.githubusercontent.com/jaakkoso/reittisuunnittelu/main/reitti.py`. Nyt chat-skilli voi hakea uusimman `reitti.py`:n repolta (GitHub on pilvikontin sallituissa verkkotunnuksissa) eikä skriptiä tarvitse upottaa SKILL.md:hen.
 3. Päivitä skilli: `skill/SKILL.md` on nykyinen versio. Skillin pitää näyttää esikatselu aina (Jaakon toive): lue `ESIKATSELU:`-rivin SVG ja näytä se show_widgetillä ennen GPX:n lähettämistä.
 
 ## Ajo
