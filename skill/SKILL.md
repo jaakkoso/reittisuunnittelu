@@ -47,14 +47,15 @@ Enduro-MTB ajetaan `xc-mtb`-profiililla.
 5. Jos raportissa valaisemattomia/tuntemattomia osuuksia on juoksussa pimeällä yli 15 %, kokeile toista `--suunta`-arvoa tai via-pistettä ja valitse parempi.
 6. Verkkovirheet (connect_rejected / 403 / curl-virhe):
    - Jos skriptin haku GitHubista epäonnistuu, kerro kerran, että claude.ai:n selainversiossa kohdassa Asetukset → Kyvykkyydet pitää sallia `raw.githubusercontent.com`.
-   - Jos BRouter tai Nominatim estää yhteyden, kerro kerran, että sallittuihin verkkotunnuksiin pitää lisätä `brouter.de` ja `nominatim.openstreetmap.org`.
+   - Jos BRouter tai Nominatim estää yhteyden, kerro kerran, että sallittuihin verkkotunnuksiin pitää lisätä `brouter.de`, `nominatim.openstreetmap.org` ja `tile.openstreetmap.org`.
    - Jos skripti tulostaa `VIRHE: brouter.de vastasi 403 … käyttöraja`, BRouterin julkinen palvelin rajoittaa kutsuja. Kerro se ja ehdota uutta yritystä hetken päästä.
    - Älä kokeile kiertoteitä.
 7. Jos BRouter palauttaa profiilivirheen, kerro virheilmoitus käyttäjälle. Älä muokkaa skriptiä: profiilit korjataan repossa Claude Codella.
 
 ## Toimita
 
-1. **Näytä esikatselu aina ensin.** Lue tulosteen `ESIKATSELU:`-rivin HTML-tiedosto (Google Maps -nappi + SVG-kartta) ja näytä se sellaisenaan `show_widget`-työkalulla ennen GPX:n lähettämistä. Värit kertovat valaistuksen (tai pinnan, jos valaistuspaino on 0) legendan mukaan. Nappi ja kartan klikkaus avaavat reitin Google Mapsissa (`MAPS:`-rivi). Mainitse tarvittaessa, että Maps laskee välipisteiden välit itse, joten se voi paikoin poiketa GPX:stä; kellossa seurataan GPX:ää.
+1. **Näytä esikatselu aina ensin.** Lue tulosteen `ESIKATSELU:`-rivin HTML-tiedosto (SVG-kuva reitistä) ja näytä se sellaisenaan `show_widget`-työkalulla ennen GPX:n lähettämistä. Värit kertovat valaistuksen (tai pinnan, jos valaistuspaino on 0) legendan mukaan. Älä tarjoa Google Maps -linkkiä: Maps laskee reitin itse ja näyttää pistoja, joita GPX:ssä ei ole.
+1b. **Julkaise tarkka kartta.** Julkaise `KARTTA:`-rivin HTML-tiedosto `Artifact`-työkalulla (`icon: "map"`, `description`: matka ja laji yhdellä lauseella). Lataa ennen ensimmäistä julkaisua kerran keskustelussa `artifact-design`-skilli; sivu täyttää jo sen sopimuksen, joten älä muokkaa tiedostoa. Kortista yksi napautus avaa sivun: OSM-pohjakartta, reitti valaistusväreillä, kilometrinumerot sekä "Koko reitti"- ja vieritettävä "Tarkka"-näkymä. Jos rivillä lukee "ilman pohjakarttaa", julkaise silti ja kerro kerran, että sallittuihin verkkotunnuksiin pitää lisätä `tile.openstreetmap.org`. Jos Artifact-työkalua ei ole, lähetä tiedosto `SendUserFile`-työkalulla (`display: "render"`).
 2. Lähetä GPX (`TIEDOSTO:`-rivi) `SendUserFile`-työkalulla (`display: "attach"`, `status: "normal"`).
 3. Vastaa lyhyesti suomeksi: matka, nousu, valaistus- ja pintajakauma, ympäristö (`YMPÄRISTÖ:` – meluisa osuus = ison tien varsi), mahdolliset pimeät pätkät (km-kohdat), muutos tavoitteeseen ja vaihtunut suunta (`SUUNTA:`).
 4. Siirto-ohje yhdellä rivillä: **Avaa tiedosto puhelimessa → Jaa → Connect → valitse laji (skriptin "Connectissa valitse") → Lähetä laitteeseen.**

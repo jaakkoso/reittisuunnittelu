@@ -15,7 +15,7 @@ Työkalu, joka tekee lenkkireitin GPX-tiedostoksi Garmin Connectiin ja sieltä F
 3. Reititys: GET `https://brouter.de/brouter?lonlats=...&profile=<id>&format=geojson`. `messages`-taulun `WayTags` sisältää OSM-tagit (lit, surface, highway). Longitude/Latitude ovat mikroasteina ja vastaavat geometrian koordinaatteja tarkasti.
 4. Lenkki (ei maalia): kolmio lähtö → p1 → p2 → lähtö, kääntöpisteet etäisyydellä r suuntiin `suunta ± 30°`. Alkuarvio `r = km / 4.7`, skaalataan `r *= tavoite / toteutunut` enintään 6 kertaa, kunnes ±6 %.
 5. Analyysi: valaistus- ja pintajakauma, ympäristö (`YMPÄRISTÖ:` meluisa/metsäinen/muu), tietyypit, yli 300 m valaisemattomat/tuntemattomat pätkät km-kohtineen, nousu (3 m hystereesi).
-6. Tulosteet: GPX 1.1 (`<type>` lajin mukaan, ASCII-tiedostonimi `laji_nimi_X.Xkm.gpx`) ja esikatselu (`..._esikatselu.html`: Google Maps -nappi + 380 px SVG, värit valaistuksen tai pinnan mukaan, mittakaava, legenda; kartan klikkaus avaa Mapsin) chatin show_widget-työkalulle. `MAPS:`-rivi: `maps_url()` tekee Google Maps -reittilinkin (lähtö, maali, 8 tasavälistä välipistettä, travelmode walking/bicycling lajin mukaan). Maps laskee välit itse, joten se voi poiketa GPX:stä.
+6. Tulosteet: GPX 1.1 (`<type>` lajin mukaan, ASCII-tiedostonimi `laji_nimi_X.Xkm.gpx`), esikatselu (`..._esikatselu.html`: 380 px SVG, värit valaistuksen tai pinnan mukaan, mittakaava, legenda) chatin show_widget-työkalulle ja karttasivu (`..._kartta.html`, `write_map()`, rivi `KARTTA:`) Artifact-julkaisuun. Karttasivu upottaa OSM-tiilet (`tile.openstreetmap.org`, zoom joka mahtuu ~640×820 px:iin + yksi tarkempi) data-URI:na, koska artifaktin CSP estää ulkoiset kuvat; reitti valkoisella reunalla, km-merkit, lähtö/maali, "Koko reitti" / vieritettävä "Tarkka" -näkymä, tilastot. Jos tiiliä ei saada, sivu tehdään ilman pohjakarttaa. Google Maps -nappi poistettu 12.11.2026 (Maps laski välit itse ja näytti olemattomia pistoja); `maps_url()` on jäljellä mutta ei käytössä.
 
 Lajit: `juoksu-katu`, `juoksu-maasto`, `gravel`, `xc-mtb`, `rullaluistelu` (enduro → xc-mtb).
 
@@ -47,4 +47,4 @@ python3 reitti.py --laji juoksu-katu --lahto "Seinäjoen asema" --km 6 --valaist
 python3 reitti.py --laji gravel --lahto "Seinäjoen asema" --maali "Ilmajoen kirkko" --nimi "Gravel Ilmajoelle" --out out
 ```
 
-Verkkotunnukset: `brouter.de`, `nominatim.openstreetmap.org`. Nominatim: max 1 pyyntö/s, User-Agent `reittisuunnittelu-skill/1.0`.
+Verkkotunnukset: `brouter.de`, `nominatim.openstreetmap.org`, `tile.openstreetmap.org` (karttasivun pohjakartta, User-Agent pakollinen). Nominatim: max 1 pyyntö/s, User-Agent `reittisuunnittelu-skill/1.0`.

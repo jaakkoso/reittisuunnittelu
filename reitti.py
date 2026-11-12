@@ -336,8 +336,8 @@ def maps_url(pts, sport, n=8):
             + "&waypoints=" + "%7C".join(f(c) for c in wps) + "&travelmode=" + MAPS_MODE.get(sport, "walking"))
 
 def write_preview(pts, km, name, mode, loop, gpxfile, url=None):
-    """Esikatselu show_widget-työkalulle: Maps-nappi (jos url) + SVG (380 px, värit = valaistus tai pinta).
-    Klikkaus napista tai kartasta avaa reitin Google Mapsissa."""
+    """Esikatselu show_widget-työkalulle: SVG (380 px, värit = valaistus tai pinta).
+    Tarkka karttanäkymä tehdään write_map()-funktiolla Artifact-julkaisuun."""
     lat0 = pts[0][0][1]; k = math.cos(math.radians(lat0))
     xs = [c[0] * k for c, _ in pts]; ys = [-c[1] for c, _ in pts]
     w0 = max(xs) - min(xs) or 1e-9; h0 = max(ys) - min(ys) or 1e-9
@@ -390,6 +390,148 @@ def write_preview(pts, km, name, mode, loop, gpxfile, url=None):
     with open(fn, "w", encoding="utf-8") as f: f.write(svg)
     return fn
 
+TILE_URL = "https://tile.openstreetmap.org/{z}/{x}/{y}.png"
+_tiles = {}; _tiles_ok = [True]
+
+def tile_px(lon, lat, z):
+    """Web Mercator -pikselikoordinaatit (256 px tiilet) zoomitasolla z."""
+    n = 256 * 2 ** z; s = math.sin(math.radians(lat))
+    return (lon + 180) / 360 * n, (0.5 - math.log((1 + s) / (1 - s)) / (4 * math.pi)) * n
+
+def fetch_tile(z, x, y):
+    """OSM-tiili base64:nä tai None. Ensimmäisen epäonnistumisen jälkeen ei yritetä enää."""
+    if (z, x, y) in _tiles: return _tiles[(z, x, y)]
+    data = None
+    if _tiles_ok[0]:
+        try:
+            req = urllib.request.Request(TILE_URL.format(z=z, x=x, y=y), headers={"User-Agent": UA})
+            with urllib.request.urlopen(req, timeout=20, context=ctx()) as r:
+                import base64; data = base64.b64encode(r.read()).decode("ascii")
+        except Exception:
+            _tiles_ok[0] = False
+    _tiles[(z, x, y)] = data
+    return data
+
+def km_points(pts):
+    """Kilometrimerkkien sijainnit (lon, lat, km)."""
+    out = []; pos = 0.0; nxt = 1000.0
+    for i in range(1, len(pts)):
+        d = hav(pts[i-1][0], pts[i][0])
+        while d and pos + d >= nxt:
+            t = (nxt - pos) / d; a, b = pts[i-1][0], pts[i][0]
+            out.append((a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t, int(nxt / 1000))); nxt += 1000
+        pos += d
+    return out
+
+def map_svg(pts, mode, loop, z, pad=40):
+    """Yksi SVG: OSM-tiilet <image>-elementteinä + reitti valaistuksen/pinnan väreillä + km-merkit."""
+    P = [tile_px(c[0], c[1], z) for c, _ in pts]
+    x0 = min(p[0] for p in P) - pad; y0 = min(p[1] for p in P) - pad
+    W = max(p[0] for p in P) + pad - x0; H = max(p[1] for p in P) + pad - y0
+    imgs = []
+    for tx in range(int(x0 // 256), int((x0 + W) // 256) + 1):
+        for ty in range(int(y0 // 256), int((y0 + H) // 256) + 1):
+            d = fetch_tile(z, tx, ty)
+            if d: imgs.append(f'<image href="data:image/png;base64,{d}" x="{tx*256 - x0:.0f}" y="{ty*256 - y0:.0f}" '
+                              'width="256" height="256"/>')
+    Q = [(x - x0, y - y0) for x, y in P]; cols = COLORS[mode]; segs = []
+    for i in range(1, len(pts)):
+        col = cols[classify(pts[i][1])[0 if mode == "lit" else 1]]
+        if segs and segs[-1][0] == col: segs[-1][1].append(Q[i])
+        else: segs.append((col, [Q[i-1], Q[i]]))
+    line = lambda seg: "M" + " L".join(f"{x:.1f} {y:.1f}" for x, y in seg)
+    allp = line(Q)
+    route = (f'<path d="{allp}" fill="none" stroke="#fff" stroke-width="8" stroke-linejoin="round" '
+             'stroke-linecap="round" opacity=".9"/>' +
+             "".join(f'<path d="{line(seg)}" fill="none" stroke="{col}" stroke-width="4.5" stroke-linejoin="round" '
+                     'stroke-linecap="round"/>' for col, seg in segs))
+    marks = ""
+    for lon, lat, k in km_points(pts):
+        x, y = tile_px(lon, lat, z); x -= x0; y -= y0
+        marks += (f'<g class="km"><circle cx="{x:.1f}" cy="{y:.1f}" r="9"/>'
+                  f'<text x="{x:.1f}" y="{y:.1f}" dy=".35em" text-anchor="middle">{k}</text></g>')
+    sx, sy = Q[0]
+    marks += f'<circle class="start" cx="{sx:.1f}" cy="{sy:.1f}" r="8"/>'
+    if not loop:
+        ex, ey = Q[-1]; marks += f'<circle class="finish" cx="{ex:.1f}" cy="{ey:.1f}" r="8"/>'
+    svg = (f'<svg viewBox="0 0 {W:.0f} {H:.0f}" width="{W:.0f}" height="{H:.0f}" role="img" '
+           f'aria-label="Reitti kartalla, zoom {z}"><rect width="100%" height="100%" class="bg"/>'
+           f'{"".join(imgs)}{route}{marks}</svg>')
+    return svg, W, H
+
+def write_map(pts, km, name, mode, loop, gpxfile, info):
+    """Itsenäinen HTML-karttasivu Artifact-julkaisuun: koko reitti + tarkka (vieritettävä) näkymä,
+    tiilet upotettu data-URI:na (artifaktin CSP estää ulkoiset kuvat)."""
+    P = [tile_px(c[0], c[1], 0) for c, _ in pts]
+    w0 = max(p[0] for p in P) - min(p[0] for p in P) or 1e-9
+    h0 = max(p[1] for p in P) - min(p[1] for p in P) or 1e-9
+    z = max(10, min(16, int(math.log2(min(640 / w0, 820 / h0)))))
+    over, _, _ = map_svg(pts, mode, loop, z)
+    detail, dw, _ = map_svg(pts, mode, loop, min(17, z + 1))
+    esc = lambda t: str(t).replace("&", "&amp;").replace("<", "&lt;").replace('"', "&quot;")
+    cols = COLORS[mode]
+    used = [c for c in cols if any(classify(t)[0 if mode == "lit" else 1] == c for _, t in pts[1:])]
+    leg = "".join(f'<span><i style="background:{cols[c]}"></i>{c}</span>' for c in used)
+    leg += '<span><i class="dot start"></i>' + ("lähtö ja maali" if loop else "lähtö") + "</span>"
+    if not loop: leg += '<span><i class="dot finish"></i>maali</span>'
+    rows = "".join(f"<dt>{esc(k)}</dt><dd>{esc(v)}</dd>" for k, v in info)
+    note = ("" if any(_tiles.values()) else
+            '<p class="warn">Pohjakartta puuttuu: tile.openstreetmap.org ei ollut tavoitettavissa. '
+            'Lisää se Claude-sovelluksen sallittuihin verkkotunnuksiin.</p>')
+    html = f"""<title>{esc(name)}</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<style>
+:root{{--bg:#f4f5f2;--card:#ffffff;--fg:#1f2421;--muted:#5d665f;--line:#d9ddd6;--accent:#1d6f57;--start:#d85a30;--fin:#3c3f45;
+--font:"Inter",system-ui,-apple-system,sans-serif;--disp:"Space Grotesk","Inter",system-ui,sans-serif}}
+@media (prefers-color-scheme:dark){{:root:not([data-theme="light"]){{--bg:#151917;--card:#1e2320;--fg:#e8ece8;--muted:#9aa49d;--line:#2f3632;--accent:#5dcaa5;color-scheme:dark}}}}
+:root[data-theme="dark"]{{--bg:#151917;--card:#1e2320;--fg:#e8ece8;--muted:#9aa49d;--line:#2f3632;--accent:#5dcaa5;color-scheme:dark}}
+body{{background:var(--bg);color:var(--fg);font:15px/1.5 var(--font);padding-block:16px 32px;
+padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}}
+main{{max-width:760px;margin:0 auto;display:grid;gap:14px}}
+h1{{font:500 22px/1.2 var(--disp);margin:0;text-wrap:balance}}
+.sub{{color:var(--muted);margin:2px 0 0;font-variant-numeric:tabular-nums}}
+.tabs{{display:flex;gap:6px}}
+.tabs button{{font:inherit;padding:7px 14px;border-radius:8px;border:1px solid var(--line);background:var(--card);color:var(--fg);cursor:pointer}}
+.tabs button[aria-pressed="true"]{{background:var(--accent);border-color:var(--accent);color:var(--bg)}}
+.tabs button:focus-visible{{outline:2px solid var(--accent);outline-offset:2px}}
+.map{{border:1px solid var(--line);border-radius:10px;overflow:hidden;background:var(--card)}}
+#v-koko svg{{display:block;width:100%;height:auto}}
+#v-tarkka{{overflow:auto;max-height:78vh;-webkit-overflow-scrolling:touch}}
+#v-tarkka svg{{display:block;max-width:none}}
+.bg{{fill:#e8e6df}}
+.km circle{{fill:#fff;stroke:#2b2f2c;stroke-width:1.5}} .km text{{font:600 11px var(--font);fill:#2b2f2c}}
+.start{{fill:var(--start);stroke:#fff;stroke-width:3}} .finish{{fill:var(--fin);stroke:#fff;stroke-width:3}}
+.legend{{display:flex;flex-wrap:wrap;gap:6px 16px;color:var(--muted);font-size:13px}}
+.legend i{{display:inline-block;width:20px;height:5px;border-radius:3px;margin-right:6px;vertical-align:middle}}
+.legend i.dot{{width:11px;height:11px;border-radius:50%}} .legend i.start{{background:var(--start)}} .legend i.finish{{background:var(--fin)}}
+dl{{display:grid;grid-template-columns:auto 1fr;gap:6px 14px;margin:0;background:var(--card);border:1px solid var(--line);border-radius:10px;padding:14px 16px}}
+dt{{color:var(--muted);font-size:13px;letter-spacing:.02em}} dd{{margin:0;min-width:0;font-variant-numeric:tabular-nums}}
+.hint,.attr{{color:var(--muted);font-size:12px;margin:0}} .warn{{color:#b5481f;margin:0}}
+</style>
+<main>
+<header><h1>{esc(name)}</h1><p class="sub">{km:.1f} km · värit: {"valaistus" if mode == "lit" else "pinta"} · numerot = kilometrit</p></header>
+{note}
+<div class="tabs" role="group" aria-label="Näkymä">
+<button id="b-koko" aria-pressed="true">Koko reitti</button><button id="b-tarkka" aria-pressed="false">Tarkka</button></div>
+<div class="map" id="v-koko">{over}</div>
+<div class="map" id="v-tarkka" hidden>{detail}</div>
+<p class="hint" id="hint" hidden>Liikuta karttaa vierittämällä tai pyyhkäisemällä.</p>
+<div class="legend">{leg}</div>
+<dl>{rows}</dl>
+<p class="attr">Pohjakartta © OpenStreetMap-tekijät. Valaistus OSM:n lit-merkinnöistä: tuntematon ei tarkoita pimeää.</p>
+</main>
+<script>
+const v={{koko:document.getElementById('v-koko'),tarkka:document.getElementById('v-tarkka')}};
+function show(k){{for(const n in v){{v[n].hidden=n!==k;document.getElementById('b-'+n).setAttribute('aria-pressed',n===k)}}
+document.getElementById('hint').hidden=k!=='tarkka';
+if(k==='tarkka'&&!v.tarkka.dataset.c){{const s=v.tarkka.querySelector('.start');if(s){{v.tarkka.scrollLeft=s.cx.baseVal.value-v.tarkka.clientWidth/2;v.tarkka.scrollTop=s.cy.baseVal.value-v.tarkka.clientHeight/2}}v.tarkka.dataset.c=1}}}}
+document.getElementById('b-koko').onclick=()=>show('koko');document.getElementById('b-tarkka').onclick=()=>show('tarkka');
+</script>
+"""
+    fn = gpxfile[:-4] + "_kartta.html"
+    with open(fn, "w", encoding="utf-8") as f: f.write(html)
+    return fn
+
 def pct(dct, total):
     return ", ".join(f"{k} {v/total*100:.0f} %" for k, v in sorted(dct.items(), key=lambda x: -x[1]))
 
@@ -425,11 +567,20 @@ def main():
 
     total, asc, stats, stretches = analyse(pts)
     fn = write_gpx(pts, total / 1000, a.nimi, a.laji, a.out)
-    url = maps_url(pts, a.laji)
-    pv = write_preview(pts, total / 1000, a.nimi, "lit" if lit > 0 else "surf", loop, fn, url)
+    mode = "lit" if lit > 0 else "surf"
+    pv = write_preview(pts, total / 1000, a.nimi, mode, loop, fn)
+    long = sorted([s for s in stretches if s[1] - s[0] > 300], key=lambda s: s[0] - s[1])[:3] if total else []
+    info = [("Matka", f"{total/1000:.2f} km" + (f" (tavoite {a.km:g} km)" if a.km else "")), ("Nousu", f"{asc:.0f} m")]
+    if total:
+        info += [("Valaistus", pct(stats["lit"], total)), ("Pinta", pct(stats["surf"], total)),
+                 ("Ympäristö", pct(stats["env"], total))]
+        if long: info.append(("Ei valomerkintää", ", ".join(f"km {s[0]/1000:.1f}–{s[1]/1000:.1f}" for s in sorted(long))))
+    info.append(("Connectissa", CONNECT_LAJI[a.laji]))
+    km_file = write_map(pts, total / 1000, a.nimi, mode, loop, fn, info)
     print(f"TIEDOSTO: {fn}")
     print(f"ESIKATSELU: {pv}")
-    print(f"MAPS: {url}")
+    print(f"KARTTA: {km_file}" + ("" if any(_tiles.values()) else
+          " (ilman pohjakarttaa: lisää tile.openstreetmap.org sallittuihin verkkotunnuksiin)"))
     print(f"LAJI: {a.laji} | Connectissa valitse: {CONNECT_LAJI[a.laji]} | valaistuspaino: {lit}")
     print(f"LÄHTÖ: {start[2]}")
     if not loop: print(f"MAALI: {end[2]}")
@@ -442,7 +593,6 @@ def main():
         print("PINTA: " + pct(stats["surf"], total))
         print("YMPÄRISTÖ: " + pct(stats["env"], total) + " (meluisa = ison tien varsi)")
         print("TIETYYPIT: " + pct(dict(sorted(stats["hw"].items(), key=lambda x: -x[1])[:5]), total))
-        long = sorted([s for s in stretches if s[1] - s[0] > 300], key=lambda s: s[0] - s[1])[:3]
         for s in sorted(long):
             print(f"VAROITUS: ei valaistusmerkintää km {s[0]/1000:.1f}–{s[1]/1000:.1f} ({(s[1]-s[0]):.0f} m)")
 
